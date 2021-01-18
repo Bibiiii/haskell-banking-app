@@ -72,9 +72,6 @@ debit amount account = do
     let b = balance acc
     writeTVar account (Customer (name acc) (number acc) (b - amount))
 
-printSomething :: Customer -> Customer -> Int -> IO ()
-printSomething f t amount = printf "Transferring £%d from Account %d to Account %d...\n" amount (number f) (number t)
-
 {- | The 'transfer' function debits one customer account, and credits the amount to another customer account.
     It makes use of the 'credit' and 'debit' functions.
     It uses 'atomically' to ensure that actions are isolated.
