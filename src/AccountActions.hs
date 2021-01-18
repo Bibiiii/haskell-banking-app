@@ -26,11 +26,11 @@ import PrintData
 import Control.Concurrent.ParallelIO 
 import GHC.Conc.Sync
 
-{- | The 'createAccount' function creates a Customer account.
+{- | The 'createCustomer' function creates a Customer account.
     It returns a new Customer record with a random name, the given account number and account balance.
 -}
-createAccount :: Int -> IO Customer -- ^  'createAccount' takes one argument of type 'Int'
-createAccount number = do
+createCustomer :: Int -> IO Customer -- ^  'createCustomer' takes one argument of type 'Int'
+createCustomer number = do
     randomName <- selectRandomName =<< txtToList "randomNames.txt" -- get random name from list
     return Customer {
       name = randomName,
@@ -38,11 +38,11 @@ createAccount number = do
       balance = 1000
     }
 
-{- | The 'createCustomer' function saves a new Customer Account.
+{- | The 'createAccount' function saves a new Customer Account.
     It returns a 'newTVarIO' of the saved account, in 'Customer' format.
 -}
-createCustomer :: Int -> IO Account
-createCustomer number = newTVarIO =<< createAccount number
+createAccount :: Int -> IO Account
+createAccount number = newTVarIO =<< createCustomer number
 
 {- | The 'showAccount' function displays the account in a table format
     It returns an empty IO action

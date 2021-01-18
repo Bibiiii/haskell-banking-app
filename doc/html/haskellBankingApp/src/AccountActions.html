@@ -1,0 +1,292 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : AccountActions
+Description : Actions related to customer accounts
+* createAccount
+* showAccount
+* transferRandom
+* credit
+* debit
+* transfer
+-}</span><span>
+</span><span id="line-11"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">AccountActions</span><span>
+</span><span id="line-12"></span><span>    </span><span class="hs-special">(</span><span>
+</span><span id="line-13"></span><span>      </span><span class="annot"><a href="AccountActions.html#createAccount"><span class="hs-identifier">createAccount</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="AccountActions.html#createCustomer"><span class="hs-identifier">createCustomer</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="AccountActions.html#showAccount"><span class="hs-identifier">showAccount</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="AccountActions.html#transferRandom"><span class="hs-identifier">transferRandom</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="AccountActions.html#credit"><span class="hs-identifier">credit</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="AccountActions.html#debit"><span class="hs-identifier">debit</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="AccountActions.html#transfer"><span class="hs-identifier">transfer</span></a></span><span>
+</span><span id="line-14"></span><span>    </span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-15"></span><span>
+</span><span id="line-16"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Concurrent</span></span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Concurrent.STM</span></span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad</span></span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="SelectRandom.html"><span class="hs-identifier">SelectRandom</span></a></span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="SelectRandom.html#selectRandomName"><span class="hs-identifier">selectRandomName</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="SelectRandom.html#selectRandomNumber"><span class="hs-identifier">selectRandomNumber</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="SelectRandom.html#selectRandomAccount"><span class="hs-identifier">selectRandomAccount</span></a></span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="DataTypes.html"><span class="hs-identifier">DataTypes</span></a></span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="DataTypes.html#Customer"><span class="hs-identifier">Customer</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="DataTypes.html#Account"><span class="hs-identifier">Account</span></a></span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Util.html"><span class="hs-identifier">Util</span></a></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Text.Printf</span></span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Text.PrettyPrint</span></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">System.Random</span></span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier">Random</span></span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">randomRIO</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="PrintData.html"><span class="hs-identifier">PrintData</span></a></span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Concurrent.ParallelIO</span></span><span> </span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Conc.Sync</span></span><span>
+</span><span id="line-28"></span><span>
+</span><span id="line-29"></span><span class="hs-comment">{- | The 'createCustomer' function creates a Customer account.
+    It returns a new Customer record with a random name, the given account number and account balance.
+-}</span><span>
+</span><span id="line-32"></span><span class="annot"><a href="AccountActions.html#createCustomer"><span class="hs-identifier hs-type">createCustomer</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="annot"><a href="DataTypes.html#Customer"><span class="hs-identifier hs-type">Customer</span></a></span><span> </span><span class="hs-comment">-- ^  'createCustomer' takes one argument of type 'Int'</span><span>
+</span><span id="line-33"></span><span id="createCustomer"><span class="annot"><span class="annottext">createCustomer :: Int -&gt; IO Customer
+</span><a href="AccountActions.html#createCustomer"><span class="hs-identifier hs-var hs-var">createCustomer</span></a></span></span><span> </span><span id="local-6989586621679062594"><span class="annot"><span class="annottext">number :: Int
+</span><a href="#local-6989586621679062594"><span class="hs-identifier hs-var">number</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-34"></span><span>    </span><span id="local-6989586621679062593"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679062593"><span class="hs-identifier hs-var">randomName</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">[String] -&gt; IO String
+</span><a href="SelectRandom.html#selectRandomName"><span class="hs-identifier hs-var">selectRandomName</span></a></span><span> </span><span class="annot"><span class="annottext">([String] -&gt; IO String) -&gt; IO [String] -&gt; IO String
+forall (m :: * -&gt; *) a b. Monad m =&gt; (a -&gt; m b) -&gt; m a -&gt; m b
+</span><span class="hs-operator hs-var">=&lt;&lt;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; IO [String]
+</span><a href="Util.html#txtToList"><span class="hs-identifier hs-var">txtToList</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;randomNames.txt&quot;</span></span><span> </span><span class="hs-comment">-- get random name from list</span><span>
+</span><span id="line-35"></span><span>    </span><span class="annot"><span class="annottext">Customer -&gt; IO Customer
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Customer :: String -&gt; Int -&gt; Int -&gt; Customer
+</span><a href="DataTypes.html#Customer"><span class="hs-identifier hs-type hs-type">Customer</span></a></span><span> </span><span class="hs-special">{</span><span>
+</span><span id="line-36"></span><span>      </span><span class="annot"><span class="annottext">name :: String
+</span><a href="DataTypes.html#name"><span class="hs-identifier hs-var">name</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679062593"><span class="hs-identifier hs-var">randomName</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-37"></span><span>      </span><span class="annot"><span class="annottext">number :: Int
+</span><a href="DataTypes.html#number"><span class="hs-identifier hs-var">number</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-number">1000</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062594"><span class="hs-identifier hs-var">number</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- for realistic-looking account number, add 1000</span><span>
+</span><span id="line-38"></span><span>      </span><span class="annot"><span class="annottext">balance :: Int
+</span><a href="DataTypes.html#balance"><span class="hs-identifier hs-var">balance</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-number">1000</span></span><span>
+</span><span id="line-39"></span><span>    </span><span class="hs-special">}</span><span>
+</span><span id="line-40"></span><span>
+</span><span id="line-41"></span><span class="hs-comment">{- | The 'createAccount' function saves a new Customer Account.
+    It returns a 'newTVarIO' of the saved account, in 'Customer' format.
+-}</span><span>
+</span><span id="line-44"></span><span class="annot"><a href="AccountActions.html#createAccount"><span class="hs-identifier hs-type">createAccount</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="annot"><a href="DataTypes.html#Account"><span class="hs-identifier hs-type">Account</span></a></span><span>
+</span><span id="line-45"></span><span id="createAccount"><span class="annot"><span class="annottext">createAccount :: Int -&gt; IO Account
+</span><a href="AccountActions.html#createAccount"><span class="hs-identifier hs-var hs-var">createAccount</span></a></span></span><span> </span><span id="local-6989586621679062584"><span class="annot"><span class="annottext">number :: Int
+</span><a href="#local-6989586621679062584"><span class="hs-identifier hs-var">number</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Customer -&gt; IO Account
+forall a. a -&gt; IO (TVar a)
+</span><span class="hs-identifier hs-var">newTVarIO</span></span><span> </span><span class="annot"><span class="annottext">(Customer -&gt; IO Account) -&gt; IO Customer -&gt; IO Account
+forall (m :: * -&gt; *) a b. Monad m =&gt; (a -&gt; m b) -&gt; m a -&gt; m b
+</span><span class="hs-operator hs-var">=&lt;&lt;</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; IO Customer
+</span><a href="AccountActions.html#createCustomer"><span class="hs-identifier hs-var">createCustomer</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062584"><span class="hs-identifier hs-var">number</span></a></span><span>
+</span><span id="line-46"></span><span>
+</span><span id="line-47"></span><span class="hs-comment">{- | The 'showAccount' function displays the account in a table format
+    It returns an empty IO action
+-}</span><span>
+</span><span id="line-50"></span><span class="annot"><a href="AccountActions.html#showAccount"><span class="hs-identifier hs-type">showAccount</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="DataTypes.html#Account"><span class="hs-identifier hs-type">Account</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ^  'showAccount' takes one argument of type 'Account'</span><span>
+</span><span id="line-51"></span><span id="showAccount"><span class="annot"><span class="annottext">showAccount :: Account -&gt; IO ()
+</span><a href="AccountActions.html#showAccount"><span class="hs-identifier hs-var hs-var">showAccount</span></a></span></span><span> </span><span id="local-6989586621679062582"><span class="annot"><span class="annottext">acc :: Account
+</span><a href="#local-6989586621679062582"><span class="hs-identifier hs-var">acc</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-52"></span><span>    </span><span id="local-6989586621679062581"><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062581"><span class="hs-identifier hs-var">a</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Account -&gt; IO Customer
+forall a. TVar a -&gt; IO a
+</span><span class="hs-identifier hs-var">readTVarIO</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062582"><span class="hs-identifier hs-var">acc</span></a></span><span>
+</span><span id="line-53"></span><span>    </span><span class="annot"><span class="annottext">String -&gt; IO ()
+</span><span class="hs-identifier hs-var">putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; IO ()) -&gt; String -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Doc -&gt; String
+</span><span class="hs-identifier hs-var">render</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; Doc
+</span><a href="PrintData.html#draw"><span class="hs-identifier hs-var">draw</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062581"><span class="hs-identifier hs-var">a</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-54"></span><span>
+</span><span id="line-55"></span><span class="hs-comment">{- | The 'credit' function reads the balance of an account and credits it with the given amount.
+    It writes the new balance to the Account TVar.
+    It returns an empty STM action
+-}</span><span>
+</span><span id="line-59"></span><span class="annot"><a href="AccountActions.html#credit"><span class="hs-identifier hs-type">credit</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="DataTypes.html#Account"><span class="hs-identifier hs-type">Account</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">STM</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ^  'credit' takes two arguments of type 'Int' and 'Account'</span><span>
+</span><span id="line-60"></span><span id="credit"><span class="annot"><span class="annottext">credit :: Int -&gt; Account -&gt; STM ()
+</span><a href="AccountActions.html#credit"><span class="hs-identifier hs-var hs-var">credit</span></a></span></span><span> </span><span id="local-6989586621679062576"><span class="annot"><span class="annottext">amount :: Int
+</span><a href="#local-6989586621679062576"><span class="hs-identifier hs-var">amount</span></a></span></span><span> </span><span id="local-6989586621679062575"><span class="annot"><span class="annottext">account :: Account
+</span><a href="#local-6989586621679062575"><span class="hs-identifier hs-var">account</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-61"></span><span>    </span><span id="local-6989586621679062574"><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062574"><span class="hs-identifier hs-var">acc</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Account -&gt; STM Customer
+forall a. TVar a -&gt; STM a
+</span><span class="hs-identifier hs-var">readTVar</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062575"><span class="hs-identifier hs-var">account</span></a></span><span>
+</span><span id="line-62"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679062572"><span class="annot"><span class="annottext">b :: Int
+</span><a href="#local-6989586621679062572"><span class="hs-identifier hs-var hs-var">b</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#balance"><span class="hs-identifier hs-var hs-var">balance</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062574"><span class="hs-identifier hs-var">acc</span></a></span><span>
+</span><span id="line-63"></span><span>    </span><span class="annot"><span class="annottext">Account -&gt; Customer -&gt; STM ()
+forall a. TVar a -&gt; a -&gt; STM ()
+</span><span class="hs-identifier hs-var">writeTVar</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062575"><span class="hs-identifier hs-var">account</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">String -&gt; Int -&gt; Int -&gt; Customer
+</span><a href="DataTypes.html#Customer"><span class="hs-identifier hs-var">Customer</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; String
+</span><a href="DataTypes.html#name"><span class="hs-identifier hs-var hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062574"><span class="hs-identifier hs-var">acc</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#number"><span class="hs-identifier hs-var hs-var">number</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062574"><span class="hs-identifier hs-var">acc</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062572"><span class="hs-identifier hs-var">b</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062576"><span class="hs-identifier hs-var">amount</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-64"></span><span>
+</span><span id="line-65"></span><span class="hs-comment">{- | The 'debit' function reads the balance of an account and debits the specified amount from the account.
+    It writes the new balance to the Account TVar.
+    It returns an empty STM action
+-}</span><span>
+</span><span id="line-69"></span><span class="annot"><a href="AccountActions.html#debit"><span class="hs-identifier hs-type">debit</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="DataTypes.html#Account"><span class="hs-identifier hs-type">Account</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">STM</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ^  'debit' takes two arguments of type 'Int' and 'Account'</span><span>
+</span><span id="line-70"></span><span id="debit"><span class="annot"><span class="annottext">debit :: Int -&gt; Account -&gt; STM ()
+</span><a href="AccountActions.html#debit"><span class="hs-identifier hs-var hs-var">debit</span></a></span></span><span> </span><span id="local-6989586621679062570"><span class="annot"><span class="annottext">amount :: Int
+</span><a href="#local-6989586621679062570"><span class="hs-identifier hs-var">amount</span></a></span></span><span> </span><span id="local-6989586621679062569"><span class="annot"><span class="annottext">account :: Account
+</span><a href="#local-6989586621679062569"><span class="hs-identifier hs-var">account</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-71"></span><span>    </span><span id="local-6989586621679062568"><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062568"><span class="hs-identifier hs-var">acc</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Account -&gt; STM Customer
+forall a. TVar a -&gt; STM a
+</span><span class="hs-identifier hs-var">readTVar</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062569"><span class="hs-identifier hs-var">account</span></a></span><span>
+</span><span id="line-72"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679062567"><span class="annot"><span class="annottext">b :: Int
+</span><a href="#local-6989586621679062567"><span class="hs-identifier hs-var hs-var">b</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#balance"><span class="hs-identifier hs-var hs-var">balance</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062568"><span class="hs-identifier hs-var">acc</span></a></span><span>
+</span><span id="line-73"></span><span>    </span><span class="annot"><span class="annottext">Account -&gt; Customer -&gt; STM ()
+forall a. TVar a -&gt; a -&gt; STM ()
+</span><span class="hs-identifier hs-var">writeTVar</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062569"><span class="hs-identifier hs-var">account</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">String -&gt; Int -&gt; Int -&gt; Customer
+</span><a href="DataTypes.html#Customer"><span class="hs-identifier hs-var">Customer</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; String
+</span><a href="DataTypes.html#name"><span class="hs-identifier hs-var hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062568"><span class="hs-identifier hs-var">acc</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#number"><span class="hs-identifier hs-var hs-var">number</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062568"><span class="hs-identifier hs-var">acc</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062567"><span class="hs-identifier hs-var">b</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-glyph hs-var">-</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062570"><span class="hs-identifier hs-var">amount</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-74"></span><span>
+</span><span id="line-75"></span><span class="annot"><a href="AccountActions.html#printSomething"><span class="hs-identifier hs-type">printSomething</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="DataTypes.html#Customer"><span class="hs-identifier hs-type">Customer</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="DataTypes.html#Customer"><span class="hs-identifier hs-type">Customer</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-76"></span><span id="printSomething"><span class="annot"><span class="annottext">printSomething :: Customer -&gt; Customer -&gt; Int -&gt; IO ()
+</span><a href="AccountActions.html#printSomething"><span class="hs-identifier hs-var hs-var">printSomething</span></a></span></span><span> </span><span id="local-6989586621679062565"><span class="annot"><span class="annottext">f :: Customer
+</span><a href="#local-6989586621679062565"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span id="local-6989586621679062564"><span class="annot"><span class="annottext">t :: Customer
+</span><a href="#local-6989586621679062564"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679062563"><span class="annot"><span class="annottext">amount :: Int
+</span><a href="#local-6989586621679062563"><span class="hs-identifier hs-var">amount</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Int -&gt; Int -&gt; Int -&gt; IO ()
+forall r. PrintfType r =&gt; String -&gt; r
+</span><span class="hs-identifier hs-var">printf</span></span><span> </span><span class="annot"><span class="hs-string">&quot;Transferring &#163;%d from Account %d to Account %d...\n&quot;</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062563"><span class="hs-identifier hs-var">amount</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#number"><span class="hs-identifier hs-var hs-var">number</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062565"><span class="hs-identifier hs-var">f</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#number"><span class="hs-identifier hs-var hs-var">number</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062564"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-77"></span><span>
+</span><span id="line-78"></span><span class="hs-comment">{- | The 'transfer' function debits one customer account, and credits the amount to another customer account.
+    It makes use of the 'credit' and 'debit' functions.
+    It uses 'atomically' to ensure that actions are isolated.
+    It returns an empty IO action
+-}</span><span>
+</span><span id="line-83"></span><span class="annot"><a href="AccountActions.html#transfer"><span class="hs-identifier hs-type">transfer</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="DataTypes.html#Account"><span class="hs-identifier hs-type">Account</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="DataTypes.html#Account"><span class="hs-identifier hs-type">Account</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">STM</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ^  'transfer' takes three arguments of type 'Int', 'Account' and 'Account'</span><span>
+</span><span id="line-84"></span><span id="transfer"><span class="annot"><span class="annottext">transfer :: Int -&gt; Account -&gt; Account -&gt; STM ()
+</span><a href="AccountActions.html#transfer"><span class="hs-identifier hs-var hs-var">transfer</span></a></span></span><span> </span><span id="local-6989586621679062561"><span class="annot"><span class="annottext">amount :: Int
+</span><a href="#local-6989586621679062561"><span class="hs-identifier hs-var">amount</span></a></span></span><span> </span><span id="local-6989586621679062560"><span class="annot"><span class="annottext">from :: Account
+</span><a href="#local-6989586621679062560"><span class="hs-identifier hs-var">from</span></a></span></span><span> </span><span id="local-6989586621679062559"><span class="annot"><span class="annottext">to :: Account
+</span><a href="#local-6989586621679062559"><span class="hs-identifier hs-var">to</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-85"></span><span>    </span><span id="local-6989586621679062558"><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062558"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Account -&gt; STM Customer
+forall a. TVar a -&gt; STM a
+</span><span class="hs-identifier hs-var">readTVar</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062560"><span class="hs-identifier hs-var">from</span></a></span><span>
+</span><span id="line-86"></span><span>    </span><span id="local-6989586621679062557"><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062557"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Account -&gt; STM Customer
+forall a. TVar a -&gt; STM a
+</span><span class="hs-identifier hs-var">readTVar</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062559"><span class="hs-identifier hs-var">to</span></a></span><span>
+</span><span id="line-87"></span><span>
+</span><span id="line-88"></span><span>    </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#balance"><span class="hs-identifier hs-var hs-var">balance</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062558"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">&gt;=</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062561"><span class="hs-identifier hs-var">amount</span></a></span><span>
+</span><span id="line-89"></span><span>        </span><span class="hs-keyword">then</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-90"></span><span>            </span><span class="annot"><span class="annottext">Int -&gt; Account -&gt; STM ()
+</span><a href="AccountActions.html#debit"><span class="hs-identifier hs-var">debit</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062561"><span class="hs-identifier hs-var">amount</span></a></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062560"><span class="hs-identifier hs-var">from</span></a></span><span>
+</span><span id="line-91"></span><span>            </span><span class="annot"><span class="annottext">Int -&gt; Account -&gt; STM ()
+</span><a href="AccountActions.html#credit"><span class="hs-identifier hs-var">credit</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062561"><span class="hs-identifier hs-var">amount</span></a></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062559"><span class="hs-identifier hs-var">to</span></a></span><span>
+</span><span id="line-92"></span><span>        </span><span class="hs-keyword">else</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-93"></span><span>            </span><span class="annot"><span class="annottext">STM ()
+forall a. STM a
+</span><span class="hs-identifier hs-var">retry</span></span><span>
+</span><span id="line-94"></span><span>
+</span><span id="line-95"></span><span class="hs-comment">{- | The 'transferRandom' function selects two random accounts and a random amount to transfer between them.
+    It performs a random delay after the action.
+    It returns an empty IO action
+-}</span><span>
+</span><span id="line-99"></span><span class="annot"><a href="AccountActions.html#transferRandom"><span class="hs-identifier hs-type">transferRandom</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="DataTypes.html#Account"><span class="hs-identifier hs-type">Account</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ^  'transferRandom' takes one argument: a list of type 'Account'</span><span>
+</span><span id="line-100"></span><span id="transferRandom"><span class="annot"><span class="annottext">transferRandom :: [Account] -&gt; IO ()
+</span><a href="AccountActions.html#transferRandom"><span class="hs-identifier hs-var hs-var">transferRandom</span></a></span></span><span> </span><span id="local-6989586621679062555"><span class="annot"><span class="annottext">accounts :: [Account]
+</span><a href="#local-6989586621679062555"><span class="hs-identifier hs-var">accounts</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-101"></span><span>    </span><span id="local-6989586621679062554"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062554"><span class="hs-identifier hs-var">rn1</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">(Int, Int) -&gt; IO Int
+forall a. Random a =&gt; (a, a) -&gt; IO a
+</span><span class="hs-identifier hs-var">randomRIO</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-number">0</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[Account] -&gt; Int
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Int
+</span><span class="hs-identifier hs-var">length</span></span><span> </span><span class="annot"><span class="annottext">[Account]
+</span><a href="#local-6989586621679062555"><span class="hs-identifier hs-var">accounts</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-glyph hs-var">-</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span class="hs-special">)</span><span>
+</span><span id="line-102"></span><span>    </span><span id="local-6989586621679062552"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062552"><span class="hs-identifier hs-var">rn2</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">(Int, Int) -&gt; IO Int
+forall a. Random a =&gt; (a, a) -&gt; IO a
+</span><span class="hs-identifier hs-var">randomRIO</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-number">0</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[Account] -&gt; Int
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Int
+</span><span class="hs-identifier hs-var">length</span></span><span> </span><span class="annot"><span class="annottext">[Account]
+</span><a href="#local-6989586621679062555"><span class="hs-identifier hs-var">accounts</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-glyph hs-var">-</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span class="hs-special">)</span><span>
+</span><span id="line-103"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679062551"><span class="annot"><span class="annottext">randomAcc1 :: Account
+</span><a href="#local-6989586621679062551"><span class="hs-identifier hs-var hs-var">randomAcc1</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Account]
+</span><a href="#local-6989586621679062555"><span class="hs-identifier hs-var">accounts</span></a></span><span> </span><span class="annot"><span class="annottext">[Account] -&gt; Int -&gt; Account
+forall a. [a] -&gt; Int -&gt; a
+</span><span class="hs-operator hs-var">!!</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062554"><span class="hs-identifier hs-var">rn1</span></a></span><span>
+</span><span id="line-104"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679062549"><span class="annot"><span class="annottext">randomAcc2 :: Account
+</span><a href="#local-6989586621679062549"><span class="hs-identifier hs-var hs-var">randomAcc2</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Account]
+</span><a href="#local-6989586621679062555"><span class="hs-identifier hs-var">accounts</span></a></span><span> </span><span class="annot"><span class="annottext">[Account] -&gt; Int -&gt; Account
+forall a. [a] -&gt; Int -&gt; a
+</span><span class="hs-operator hs-var">!!</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062552"><span class="hs-identifier hs-var">rn2</span></a></span><span>
+</span><span id="line-105"></span><span>
+</span><span id="line-106"></span><span>    </span><span id="local-6989586621679062548"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062548"><span class="hs-identifier hs-var">randomAmount</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">(Int, Int) -&gt; IO Int
+forall a. Random a =&gt; (a, a) -&gt; IO a
+</span><span class="hs-identifier hs-var">randomRIO</span></span><span class="hs-special">(</span><span class="annot"><span class="hs-number">10</span></span><span class="hs-special">,</span><span class="annot"><span class="hs-number">50</span></span><span class="hs-special">)</span><span>
+</span><span id="line-107"></span><span>
+</span><span id="line-108"></span><span>    </span><span id="local-6989586621679062547"><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062547"><span class="hs-identifier hs-var">ra1</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Account -&gt; IO Customer
+forall a. TVar a -&gt; IO a
+</span><span class="hs-identifier hs-var">readTVarIO</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062551"><span class="hs-identifier hs-var">randomAcc1</span></a></span><span>
+</span><span id="line-109"></span><span>    </span><span id="local-6989586621679062546"><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062546"><span class="hs-identifier hs-var">ra2</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Account -&gt; IO Customer
+forall a. TVar a -&gt; IO a
+</span><span class="hs-identifier hs-var">readTVarIO</span></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062551"><span class="hs-identifier hs-var">randomAcc1</span></a></span><span>
+</span><span id="line-110"></span><span>
+</span><span id="line-111"></span><span>    </span><span class="annot"><span class="annottext">String -&gt; Int -&gt; Int -&gt; Int -&gt; IO ()
+forall r. PrintfType r =&gt; String -&gt; r
+</span><span class="hs-identifier hs-var">printf</span></span><span> </span><span class="annot"><span class="hs-string">&quot;Attempting to transfer &#163;%d from #%d to #%d...\n&quot;</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062548"><span class="hs-identifier hs-var">randomAmount</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#number"><span class="hs-identifier hs-var hs-var">number</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062547"><span class="hs-identifier hs-var">ra1</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Customer -&gt; Int
+</span><a href="DataTypes.html#number"><span class="hs-identifier hs-var hs-var">number</span></a></span><span> </span><span class="annot"><span class="annottext">Customer
+</span><a href="#local-6989586621679062546"><span class="hs-identifier hs-var">ra2</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-112"></span><span>    </span><span class="annot"><span class="annottext">STM () -&gt; IO ()
+forall a. STM a -&gt; IO a
+</span><span class="hs-identifier hs-var">atomically</span></span><span> </span><span class="annot"><span class="annottext">(STM () -&gt; IO ()) -&gt; STM () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Account -&gt; Account -&gt; STM ()
+</span><a href="AccountActions.html#transfer"><span class="hs-identifier hs-var">transfer</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062548"><span class="hs-identifier hs-var">randomAmount</span></a></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062551"><span class="hs-identifier hs-var">randomAcc1</span></a></span><span> </span><span class="annot"><span class="annottext">Account
+</span><a href="#local-6989586621679062549"><span class="hs-identifier hs-var">randomAcc2</span></a></span><span>
+</span><span id="line-113"></span><span>
+</span><span id="line-114"></span><span>    </span><span id="local-6989586621679062544"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062544"><span class="hs-identifier hs-var">randomDelay</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">(Int, Int) -&gt; IO Int
+forall a. Random a =&gt; (a, a) -&gt; IO a
+</span><span class="hs-identifier hs-var">randomRIO</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-number">100</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-number">100000</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span>
+</span><span id="line-115"></span><span>    </span><span>
+</span><span id="line-116"></span><span>    </span><span class="annot"><span class="annottext">Int -&gt; IO ()
+</span><span class="hs-identifier hs-var">threadDelay</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679062544"><span class="hs-identifier hs-var">randomDelay</span></a></span></pre></body></html>

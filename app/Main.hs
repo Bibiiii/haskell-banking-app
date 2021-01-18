@@ -22,7 +22,7 @@ import Data.Traversable
 main :: IO () -- ^ Performs an IO action
 main = do
     -- Create 10 customers
-    let accs = map createCustomer [1..10]
+    let accs = map createAccount [1..10]
     allAccounts <- sequence accs
 
     putStrLn "\n******************************************************"
